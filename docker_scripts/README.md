@@ -1,0 +1,1 @@
+All sh scripts should be run inside docker_scripts directory

@@ -1,0 +1,18 @@
+name: base
+channels:
+  - anaconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9.7
+  - conda-forge::termcolor
+  - conda-forge::black
+  - conda-forge::hydra-core
+  - anaconda::ipython
+  - anaconda::path
+  - pip
+  - tqdm
+  - cython
+  - pip:
+    - "black[jupyter]"
+    - python-telegram-bot

@@ -1,0 +1,1 @@
+docker run -d --shm-size=8g --memory=80g --cpus=40 --user ${UID}:${UID} --name ${USER}_$(basename $(dirname "$PWD"))_cont --rm -it --init -v $(dirname "$PWD"):/app ${USER}_$(basename $(dirname "$PWD")) bash
