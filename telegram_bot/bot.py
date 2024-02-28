@@ -8,6 +8,8 @@ from telegram.ext import (
     ContextTypes,
 )
 
+import pandas as pd
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -19,15 +21,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, text=update.message.text
-    )
 
 
-async def caps(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text_caps = " ".join(context.args).upper()
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=text_caps)
+
+async def show_table(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # load table
+    table = pd.read_csv('../data/work_time.csv', index_col='Date')
+    if len(context.args) > 1:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text='Please send valid number of days')
+    elif len(context.args) == 0:
+        days = len(table)
+    else:
+        days = int(context.args[-1])
+    table = table.iloc[-days:]
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=table.to_markdown())
 
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -43,11 +50,9 @@ if __name__ == "__main__":
     application = ApplicationBuilder().token(token).build()
 
     start_handler = CommandHandler("start", start)
-    echo_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), echo)
-    caps_handler = CommandHandler("caps", caps)
+    show_handler = CommandHandler("table", show_table)
     unknown_handler = MessageHandler(filters.COMMAND, unknown)
     application.add_handler(start_handler)
-    application.add_handler(echo_handler)
-    application.add_handler(caps_handler)
+    application.add_handler(show_handler)
     application.add_handler(unknown_handler)
     application.run_polling()
