@@ -9,6 +9,7 @@ dependencies:
   - conda-forge::black
   - conda-forge::hydra-core
   - anaconda::ipython
+  - anaconda::ipykernel
   - anaconda::path
   - pip
   - tqdm
@@ -16,3 +17,5 @@ dependencies:
   - pip:
     - "black[jupyter]"
     - python-telegram-bot
+    - pandas
+    - numpy
