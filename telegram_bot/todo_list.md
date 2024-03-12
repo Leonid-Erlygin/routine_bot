@@ -3,4 +3,5 @@
 ## Bot todo list
 - [ ] Use conversation style to get information 
 - [ ] Allow to record other activities, not only worktime
-- [ ] Implement recording of hour specific activity  
+- [ ] Implement recording of hour specific activity
+- [ ] Add menu botton

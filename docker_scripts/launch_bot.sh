@@ -1,1 +1,1 @@
-docker run -d --shm-size=2g --memory=2g --cpus=40 --user ${UID}:${UID} --name ${USER}_$(basename $(dirname "$PWD"))_bot_cont --rm -it --init -v $(dirname "$PWD"):/app -w="/app" ${USER}_$(basename $(dirname "$PWD")) python telegram_bot/bot.py
+docker run -d --shm-size=2g --memory=2g --cpus=40 --user ${UID}:${UID} --name ${USER}_$(basename $(dirname "$PWD"))_run_cont --rm -it --init -v $(dirname "$PWD"):/app -w="/app" ${USER}_$(basename $(dirname "$PWD")) python telegram_bot/bot.py
