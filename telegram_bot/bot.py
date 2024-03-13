@@ -1,6 +1,6 @@
 import logging
 from typing import Dict
-
+from datetime import date, time
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -12,6 +12,8 @@ from telegram.ext import (
     filters,
     CallbackQueryHandler,
 )
+
+import pandas as pd
 
 with open("/app/telegram_bot/token.txt") as fd:
     token = fd.readline()
@@ -34,30 +36,12 @@ async def show_table(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def add_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def add_time(activity_type: str, date: date, time: time):
     # load table
-    table = pd.read_csv("/app/data/work_time_upd.csv", index_col="Date")
-    if len(context.args) != 2:
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id, text="Please send valid number of days"
-        )
-    else:
-        day = context.args[-2]
-        time = context.args[-1]
-        hour_and_min = time.split(":")
-        if len(hour_and_min) != 2:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id, text="Please send valid time hh:mm"
-            )
-        else:
-            current_date = f"{str(day).zfill(2)}.{str(date.today().month).zfill(2)}.{date.today().year}"
-            time = f"{hour_and_min[0]}:{str(hour_and_min[1]).zfill(2)}"
-            table.loc[current_date] = [time]
-            table.to_csv("/app/data/work_time_upd.csv")
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"recorded work time {time} at date {current_date}",
-            )
+    table_path_name = f"/app/data/{activity_type.lower()}_time_upd.csv"
+    table = pd.read_csv(table_path_name, index_col="Date")
+    table.loc[str(date)] = [str(time)[:-3]]
+    table.to_csv(table_path_name)
 
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -81,131 +65,65 @@ START_ROUTES, END_ROUTES = range(2)
 # Callback data
 ONE, TWO, THREE, FOUR = range(4)
 
+CHOOSING = 0
+DATE_REPLY = 1
+TIME_REPLY = 2
+
+TYPING_REPLY = 3
+
+reply_keyboard = [
+    ["Work", "Deutsch"],
+    ["Record"],
+]
+date_keyboard = [["Today", "Enter date"]]
+markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Send message on `/start`."""
-    # Get user that sent /start and log his name
-    user = update.message.from_user
-    logger.info("User %s started the conversation.", user.first_name)
-    # Build InlineKeyboard where each button has a displayed text
-    # and a string as callback_data
-    # The keyboard is a list of button rows, where each row is in turn
-    # a list (hence `[[...]]`).
-    keyboard = [
-        [
-            InlineKeyboardButton("1", callback_data=str(ONE)),
-            InlineKeyboardButton("2", callback_data=str(TWO)),
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    # Send message with text and appended InlineKeyboard
+    """Start the conversation and ask user for input."""
     await update.message.reply_text(
-        "Start handler, Choose a route", reply_markup=reply_markup
+        "Hi! My name is Doctor Botter. I will hold a more complex conversation with you. "
+        "Why don't you tell me something about yourself?",
+        reply_markup=markup,
     )
-    # Tell ConversationHandler that we're in state `FIRST` now
-    return START_ROUTES
+
+    return CHOOSING
 
 
-async def start_over(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Prompt same text & keyboard as `start` does but not as new message"""
-    # Get CallbackQuery from Update
-    query = update.callback_query
-    # CallbackQueries need to be answered, even if no notification to the user is needed
-    # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
-    await query.answer()
-    keyboard = [
-        [
-            InlineKeyboardButton("1", callback_data=str(ONE)),
-            InlineKeyboardButton("2", callback_data=str(TWO)),
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    # Instead of sending a new message, edit the message that
-    # originated the CallbackQuery. This gives the feeling of an
-    # interactive menu.
-    await query.edit_message_text(
-        text="Start handler, Choose a route", reply_markup=reply_markup
+async def activity_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Ask the user for info about the selected predefined choice."""
+    text = update.message.text
+    context.user_data["choice"] = text
+    await update.message.reply_text(
+        f"Choose date for {text.lower()} worktime", reply_markup=date_keyboard
     )
-    return START_ROUTES
+
+    return DATE_REPLY
 
 
-async def one(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Show new choice of buttons"""
-    query = update.callback_query
-    await query.answer()
-    keyboard = [
-        [
-            InlineKeyboardButton("3", callback_data=str(THREE)),
-            InlineKeyboardButton("4", callback_data=str(FOUR)),
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(
-        text="First CallbackQueryHandler, Choose a route", reply_markup=reply_markup
-    )
-    return START_ROUTES
+async def record_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Store date provided"""
+    user_data = context.user_data
+    text = update.message.text
+    if text == "Today":
+        work_date = date.today()
+        activity_type = user_data["choice"]
+        user_data[activity_type] = {"date": work_date}
+        # del user_data["choice"]
+        return TIME_REPLY
+    else:
+        await update.message.reply_text(
+            "Enter date",
+        )
+        return
 
 
-async def two(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Show new choice of buttons"""
-    query = update.callback_query
-    await query.answer()
-    keyboard = [
-        [
-            InlineKeyboardButton("1", callback_data=str(ONE)),
-            InlineKeyboardButton("3", callback_data=str(THREE)),
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(
-        text="Second CallbackQueryHandler, Choose a route", reply_markup=reply_markup
-    )
-    return START_ROUTES
-
-
-async def three(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Show new choice of buttons. This is the end point of the conversation."""
-    query = update.callback_query
-    await query.answer()
-    keyboard = [
-        [
-            InlineKeyboardButton("Yes, let's do it again!", callback_data=str(ONE)),
-            InlineKeyboardButton("Nah, I've had enough ...", callback_data=str(TWO)),
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(
-        text="Third CallbackQueryHandler. Do want to start over?",
-        reply_markup=reply_markup,
-    )
-    # Transfer to conversation state `SECOND`
-    return END_ROUTES
-
-
-async def four(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Show new choice of buttons"""
-    query = update.callback_query
-    await query.answer()
-    keyboard = [
-        [
-            InlineKeyboardButton("2", callback_data=str(TWO)),
-            InlineKeyboardButton("3", callback_data=str(THREE)),
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(
-        text="Fourth CallbackQueryHandler, Choose a route", reply_markup=reply_markup
-    )
-    return START_ROUTES
-
-
-async def end(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Returns `ConversationHandler.END`, which tells the
-    ConversationHandler that the conversation is over.
-    """
-    query = update.callback_query
-    await query.answer()
-    await query.edit_message_text(text="See you next time!")
+async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Record user data"""
+    user_data = context.user_data
+    for activity_type, time in d:
+        pass
+    user_data.clear()
     return ConversationHandler.END
 
 
@@ -214,30 +132,26 @@ def main() -> None:
     # Create the Application and pass it your bot's token.
     application = Application.builder().token(token).build()
 
-    # Setup conversation handler with the states FIRST and SECOND
-    # Use the pattern parameter to pass CallbackQueries with specific
-    # data pattern to the corresponding handlers.
-    # ^ means "start of line/string"
-    # $ means "end of line/string"
-    # So ^ABC$ will only allow 'ABC'
+    # Add conversation handler with the states CHOOSING, TYPING_CHOICE and TYPING_REPLY
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            START_ROUTES: [
-                CallbackQueryHandler(one, pattern="^" + str(ONE) + "$"),
-                CallbackQueryHandler(two, pattern="^" + str(TWO) + "$"),
-                CallbackQueryHandler(three, pattern="^" + str(THREE) + "$"),
-                CallbackQueryHandler(four, pattern="^" + str(FOUR) + "$"),
+            CHOOSING: [
+                MessageHandler(filters.Regex("^(Work|Deutsch)$"), activity_choice),
             ],
-            END_ROUTES: [
-                CallbackQueryHandler(start_over, pattern="^" + str(ONE) + "$"),
-                CallbackQueryHandler(end, pattern="^" + str(TWO) + "$"),
+            DATE_REPLY: [
+                MessageHandler(filters.Regex("^(Today|Enter date)$"), record_date)
+            ],
+            TYPING_REPLY: [
+                MessageHandler(
+                    filters.TEXT & ~(filters.COMMAND | filters.Regex("^Done$")),
+                    received_information,
+                )
             ],
         },
-        fallbacks=[CommandHandler("start", start)],
+        fallbacks=[MessageHandler(filters.Regex("^Record$"), done)],
     )
 
-    # Add ConversationHandler to application that will be used for handling updates
     application.add_handler(conv_handler)
 
     # Run the bot until the user presses Ctrl-C
