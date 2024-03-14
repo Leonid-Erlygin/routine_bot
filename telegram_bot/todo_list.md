@@ -2,6 +2,6 @@
 [Examples](https://docs.python-telegram-bot.org/en/stable/examples.html)
 ## Bot todo list
 - [ ] Use conversation style to get information 
-- [ ] Allow to record other activities, not only worktime
+- [ ] Allow to record other activities, not only worktime and deutsch time
 - [ ] Implement recording of hour specific activity
 - [ ] Add menu botton

@@ -36,11 +36,11 @@ async def show_table(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-def add_time(activity_type: str, date: date, time: time):
+def add_time(activity_type: str, date: str, time: str):
     # load table
     table_path_name = f"/app/data/{activity_type.lower()}_time_upd.csv"
     table = pd.read_csv(table_path_name, index_col="Date")
-    table.loc[str(date)] = [str(time)[:-3]]
+    table.loc[date] = [time]
     table.to_csv(table_path_name)
 
 
@@ -68,34 +68,35 @@ ONE, TWO, THREE, FOUR = range(4)
 CHOOSING = 0
 DATE_REPLY = 1
 TIME_REPLY = 2
-
+END_STATE = 3
 TYPING_REPLY = 3
 
 reply_keyboard = [
     ["Work", "Deutsch"],
     ["Record"],
 ]
-date_keyboard = [["Today", "Enter date"]]
-markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+date_keyboard = [["Today"]]
+end_keyboard = [["Record"], ["Add more data"]]
+markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
+date_markup = ReplyKeyboardMarkup(date_keyboard, one_time_keyboard=False)
+end_markup = ReplyKeyboardMarkup(end_keyboard, one_time_keyboard=False)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Start the conversation and ask user for input."""
+    """Start the conversation and ask user to choose what he want to record"""
     await update.message.reply_text(
-        "Hi! My name is Doctor Botter. I will hold a more complex conversation with you. "
-        "Why don't you tell me something about yourself?",
+        "Select activity type",
         reply_markup=markup,
     )
-
     return CHOOSING
 
 
 async def activity_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Ask the user for info about the selected predefined choice."""
+    """Ask the user date for this type of activity"""
     text = update.message.text
-    context.user_data["choice"] = text
+    context.user_data["current_activity"] = text
     await update.message.reply_text(
-        f"Choose date for {text.lower()} worktime", reply_markup=date_keyboard
+        f"Choose date for {text.lower()} worktime", reply_markup=date_markup
     )
 
     return DATE_REPLY
@@ -106,23 +107,42 @@ async def record_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     user_data = context.user_data
     text = update.message.text
     if text == "Today":
-        work_date = date.today()
-        activity_type = user_data["choice"]
-        user_data[activity_type] = {"date": work_date}
-        # del user_data["choice"]
-        return TIME_REPLY
+        work_date = str(date.today())
     else:
-        await update.message.reply_text(
-            "Enter date",
-        )
-        return
+        work_date = text
+    activity_type = user_data["current_activity"]
+    user_data[activity_type] = {"date": work_date}
+    await update.message.reply_text(
+        f"Please enter work time of {activity_type} on date {work_date}"
+    )
+    return TIME_REPLY
+
+
+async def record_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Store date provided"""
+    user_data = context.user_data
+    text = update.message.text
+    activity_type = user_data["current_activity"]
+    del user_data["current_activity"]
+    user_data[activity_type]["time"] = text
+    await update.message.reply_text(
+        f"Work time {text} of {activity_type} on date {user_data[activity_type]['date']} has been reconded"
+        "Would you like to add something?",
+        reply_markup=end_markup,
+    )
+    return END_STATE
 
 
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Record user data"""
     user_data = context.user_data
-    for activity_type, time in d:
-        pass
+    for activity_type, time in user_data:
+        assert activity_type in ["Work", "Deutsch"]
+        add_time(
+            activity_type,
+            user_data[activity_type]["date"],
+            user_data[activity_type]["time"],
+        )
     user_data.clear()
     return ConversationHandler.END
 
@@ -140,13 +160,17 @@ def main() -> None:
                 MessageHandler(filters.Regex("^(Work|Deutsch)$"), activity_choice),
             ],
             DATE_REPLY: [
-                MessageHandler(filters.Regex("^(Today|Enter date)$"), record_date)
-            ],
-            TYPING_REPLY: [
+                MessageHandler(filters.Regex("^Today$"), record_date),
                 MessageHandler(
-                    filters.TEXT & ~(filters.COMMAND | filters.Regex("^Done$")),
-                    received_information,
-                )
+                    filters.Regex("^202[0-9]-[0-1][0-9]-[0-3][0-9]$"), record_date
+                ),
+            ],
+            TIME_REPLY: [
+                MessageHandler(filters.Regex("^[0-9]:[0-9][0-9]$"), record_time)
+            ],
+            END_STATE: [
+                MessageHandler(filters.Regex("^Add more data$"), start),
+                MessageHandler(filters.Regex("^Record$"), done),
             ],
         },
         fallbacks=[MessageHandler(filters.Regex("^Record$"), done)],
