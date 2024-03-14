@@ -38,7 +38,7 @@ async def show_table(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def add_time(activity_type: str, date: str, time: str):
     # load table
-    table_path_name = f"/app/data/{activity_type.lower()}_time_upd.csv"
+    table_path_name = f"/app/data/{activity_type.lower()}_time.csv"
     table = pd.read_csv(table_path_name, index_col="Date")
     table.loc[date] = [time]
     table.to_csv(table_path_name)
@@ -68,18 +68,22 @@ ONE, TWO, THREE, FOUR = range(4)
 CHOOSING = 0
 DATE_REPLY = 1
 TIME_REPLY = 2
-END_STATE = 3
+TABLE_REPLY = 3
+END_STATE = 4
 TYPING_REPLY = 3
+
 
 reply_keyboard = [
     ["Work", "Deutsch"],
+    ["Show Table"],
     ["Record"],
 ]
+
 date_keyboard = [["Today"]]
 end_keyboard = [["Record"], ["Add more data"]]
-markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
-date_markup = ReplyKeyboardMarkup(date_keyboard, one_time_keyboard=False)
-end_markup = ReplyKeyboardMarkup(end_keyboard, one_time_keyboard=False)
+markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+date_markup = ReplyKeyboardMarkup(date_keyboard, one_time_keyboard=True)
+end_markup = ReplyKeyboardMarkup(end_keyboard, one_time_keyboard=True)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -126,7 +130,7 @@ async def record_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     del user_data["current_activity"]
     user_data[activity_type]["time"] = text
     await update.message.reply_text(
-        f"Work time {text} of {activity_type} on date {user_data[activity_type]['date']} has been reconded"
+        f"Work time {text} of {activity_type} on date {user_data[activity_type]['date']} has been added\n"
         "Would you like to add something?",
         reply_markup=end_markup,
     )
@@ -136,7 +140,7 @@ async def record_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Record user data"""
     user_data = context.user_data
-    for activity_type, time in user_data:
+    for activity_type, time in user_data.items():
         assert activity_type in ["Work", "Deutsch"]
         add_time(
             activity_type,
@@ -145,6 +149,45 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         )
     user_data.clear()
     return ConversationHandler.END
+
+    # table = pd.read_csv("/app/data/work_time_upd.csv", index_col="Date")
+    # if len(context.args) > 1:
+    #     await context.bot.send_message(
+    #         chat_id=update.effective_chat.id, text="Please send valid number of days"
+    #     )
+    # elif len(context.args) == 0:
+    #     days = 7  # len(table)
+    # else:
+    #     days = int(context.args[-1])
+    # table = table.iloc[-days:]
+    # await context.bot.send_message(
+    #     chat_id=update.effective_chat.id, text=table.to_markdown()
+    # )
+
+
+async def table_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Asks user to show table"""
+    await update.message.reply_text(
+        "Select activity type",
+        reply_markup=ReplyKeyboardMarkup([["Work", "Deutsch"]], one_time_keyboard=True),
+    )
+    return TABLE_REPLY
+
+
+async def show_table(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Asks user to show table"""
+    text = update.message.text
+    table = pd.read_csv(f"/app/data/{text.lower()}_time.csv", index_col="Date")
+    days = 7
+    table = table.iloc[-days:]
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id, text=table.to_markdown()
+    )
+    await update.message.reply_text(
+        "Would you like to add something?",
+        reply_markup=end_markup,
+    )
+    return END_STATE
 
 
 def main() -> None:
@@ -158,6 +201,7 @@ def main() -> None:
         states={
             CHOOSING: [
                 MessageHandler(filters.Regex("^(Work|Deutsch)$"), activity_choice),
+                MessageHandler(filters.Regex("^Show Table$"), table_choice),
             ],
             DATE_REPLY: [
                 MessageHandler(filters.Regex("^Today$"), record_date),
@@ -167,6 +211,9 @@ def main() -> None:
             ],
             TIME_REPLY: [
                 MessageHandler(filters.Regex("^[0-9]:[0-9][0-9]$"), record_time)
+            ],
+            TABLE_REPLY: [
+                MessageHandler(filters.Regex("^(Work|Deutsch)$"), show_table)
             ],
             END_STATE: [
                 MessageHandler(filters.Regex("^Add more data$"), start),
